@@ -1,0 +1,20 @@
+<job>
+<runtime>
+<description>Sends fax</description>
+<named name="filename"
+helpstring="Path and filename of printable file"
+type="string" required="true" />
+<named name="faxnumber"
+helpstring="Fax number to dial"
+type="string" required="true" />
+<named name="server"
+helpstring="Name of computer running Fax Service"
+type="string" required="false" />
+</runtime>
+<script language="VBScript">
+Set oDoc = CreateObject("FaXCOMEX.FaxDocument")
+oDoc.Body = WScript.Arguments.Named("filename")
+oDoc.Recipients.Add WScript.Arguments.Named("faxnumber")
+oDoc.Submit WScript.Arguments.Named("server")
+</script>
+</job>
