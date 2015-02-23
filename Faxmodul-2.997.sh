@@ -14,7 +14,7 @@
 #
 # Script erfordert sendfax.wsf aufseiten des Windows PCs, siehe ganz unten.
 #
-# Speedpoint (FW), Stand: Februar 2015
+# Speedpoint (FW) /HBU (TL), Stand: Februar 2015
 #
 ###############################################################################
 
