@@ -10,11 +10,7 @@
 # Diess Modul nimmt Faxjobs aus der DATA VITAL OO-Schnittstelle
 # entgegen und uebergibt sie an einen Windows PC mit Windows Faxdrucker.
 #
-<<<<<<< HEAD
 # Bitte zur regelmaessigen Ausführung in die crontab eintragen!
-=======
-# Bitte zur regelmaessigen AusfÃ¼hrung in die crontab eintragen!
->>>>>>> origin/master
 #
 # Script erfordert sendfax.wsf aufseiten des Windows PCs, siehe ganz unten.
 #
@@ -159,21 +155,12 @@ do
 		###
 		### +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 		###
-<<<<<<< HEAD
 		### Empfänger festlegen
 		###
 		#################################################################################
 		### Hinweis: Vorraussetzung hierfür ist die Dateinamenskonvention der 
 		###          OpenOffice Schnittstelle.
 		###          Dies muss ggf. auch für den Cups-Drucker beachtet werden
-=======
-		### EmpfÃ¤nger festlegen
-		###
-		#################################################################################
-		### Hinweis: Vorraussetzung hierfÃ¼r ist die Dateinamenskonvention der 
-		###          OpenOffice Schnittstelle.
-		###          Dies muss ggf. auch fÃ¼r den Cups-Drucker beachtet werden
->>>>>>> origin/master
 		#################################################################################
 		FAXFILENF=`ls $FAXFILE.fnr | awk -F "_" '{print NF}'`
 		if [ "$FAXFILENF" == "6" ]; then
@@ -182,11 +169,7 @@ do
 			FAXEMPF=`ls $FAXFILE.fnr | awk -F "_" '{print $3}'`
 		fi
 		###
-<<<<<<< HEAD
 		### Prüfen ob Empfänger "Leer" ist und auf "Unbekannt" setzen
-=======
-		### PrÃ¼fen ob EmpfÃ¤nger "Leer" ist und auf "Unbekannt" setzen
->>>>>>> origin/master
 		###
 		if [ "$FAXEMPF" == "" ]; then
 			FAXEMPF="Unbekannt"
@@ -198,11 +181,7 @@ do
 		FAXBETR=`ls $FAXFILE.fnr | awk -F "_" '{print $1"-"$2}'`
 		echo "   --> Der Betreff ist: $FAXBETR" | tee -a $LOG
 		###
-<<<<<<< HEAD
 		### Es wird geprüft ob ein Dokument aus dem Pat-Ordner versendet werden soll
-=======
-		### Es wird geprÃ¼ft ob ein Dokument aus dem Pat-Ordner versendet werden soll
->>>>>>> origin/master
 		###
 		pdftotext $ITEM
 		TXTFILE=$FAXFILE.txt
@@ -211,11 +190,7 @@ do
 			DOCPATH=`cat $TXTFILE | grep '@@DOC-Path@@' | awk -F "@@" '{print $3}'`
 			DOCNAME=`cat $TXTFILE | grep '@@DOC-Name@@' | awk -F "@@" '{print $3}'`
 			#############################################################################
-<<<<<<< HEAD
 			### ToDo Prüfen ob datei vorhanden ist, sonst Abbruch
-=======
-			### ToDo PrÃ¼fen ob datei vorhanden ist, sonst Abbruch
->>>>>>> origin/master
 			#############################################################################
 			###
 			### Datei aus Pat-Ordner wird kopiert und umbenannt
@@ -223,11 +198,7 @@ do
 			cp -n $DOCPATH/"$DOCNAME" $FAXOUT/working
 			DOCNAME=`echo $DOCNAME | awk -F "/" '{print $NF}'`  ### entfernt ggf vorangestellte Verzeichnisse
 			mv $FAXOUT/working/"$DOCNAME" $FAXOUT/working/$FAXFILE.pdf  
-<<<<<<< HEAD
 			rm -f $ITEM	$TXTFILE	### Übergabedatei wir aus $FAXOUT gelöscht
-=======
-			rm -f $ITEM	$TXTFILE	### Ãœbergabedatei wir aus $FAXOUT gelÃ¶scht
->>>>>>> origin/master
 			mv $FNRFILE $FAXOUT/working
 		else
 		###
@@ -241,13 +212,8 @@ do
 		gs -q -sDEVICE=tiffg4 -r600 -dBATCH -sPAPERSIZE=a4 -dPDFFitPage -dNOPAUSE \
 		-sOutputFile=working/$FAXFILE.tif working/$FAXFILE.pdf
 		#################################################################################
-<<<<<<< HEAD
 		### Hinweis: Bei dem convert Befehl wird die erzeugte Datei zu groß
 		###          Mit dieser Größe kann Windows Fax dann nicht mehr umgehen
-=======
-		### Hinweis: Bei dem convert Befehl wird die erzeugte Datei zu groÃŸ
-		###          Mit dieser GrÃ¶ÃŸe kann Windows Fax dann nicht mehr umgehen
->>>>>>> origin/master
 		###          und macht daraus ein schwarzes Blatt (ca. halbe A4 Seite)
 		###
 		###          convert working/$FAXFILE.pdf working/$FAXFILE.tif
@@ -264,22 +230,14 @@ do
 			#echo "       Rexserver an $WINPC ist bereit." | tee -a $LOG
 			WINPATH=`echo $FAXOUT | awk -F "/" '{print $NF}'`     
 			#############################################################################
-<<<<<<< HEAD
 			### ToDo "WINPATH" ggf an anderer stelle + Variable für LW-Buchstaben
-=======
-			### ToDo "WINPATH" ggf an anderer stelle + Variable fÃ¼r LW-Buchstaben
->>>>>>> origin/master
 			#############################################################################
 			echo "DAVCMD start /min $SENDCMD W:\\$WINPATH\working\\$FAXFILE.tif $FAXNR $FAXBETR $FAXEMPF" | netcat $FAXSRV $WINPORT >/dev/null 
 			echo "Bitte warten..."
 			sleep 5
 			rm -f working/$FAXFILE.tif working/$FNRFILE working/$FAXFILE.pdf
 			#############################################################################
-<<<<<<< HEAD
 			### ToDo Übermittlung durch eine Batch auf Windows-Seite ersetzen,
-=======
-			### ToDo Ãœbermittlung durch eine Batch auf Windows-Seite ersetzen,
->>>>>>> origin/master
 			###      da der Rexserver wartet bis die Batch beendet ist und somit der 
 			###      sleep Befehl ausgelassen werden kann...
 			#############################################################################
