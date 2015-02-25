@@ -14,7 +14,7 @@
 #
 # Script erfordert sendfax.wsf aufseiten des Windows PCs, siehe ganz unten.
 #
-# Speedpoint (FW), Stand: Februar 2015
+# Speedpoint (FW) /HBU (TL), Stand: Februar 2015
 #
 ###############################################################################
 
@@ -29,33 +29,42 @@
 ###############################################################################
 ###############################################################################
 #
-# DV Faxablage, bitte im DV OpenOffice Setup entsprechend anpassen:
+# Ordner und Pfade:
 #
-FAXOUT="/home/david/trpword/fax"
+WORD="/home/david/trpword"		# DV Standerd, moeglichst belassen!
+WINLW="W:"				# DV Standard, moeglichst belassen!
+#
+#
+# Arbeitsordner des Faxmoduls in $WORD, bitte mit OO-Config ablgleichen:
+# Diese Ordner werden ggf. neu angelegt.
+#
+FAXDAT="faxablage"			# entsteht in $WORD
+WORK="working"				# entsteht unterhalb $FAXDAT
+FAIL="failed"				# entsteht unterhalb $FAXDAT
 #
 ###############################################################################
 #
 # Trace fuer dieses Script:
 #
-LOG="$FAXOUT/00_Speedpoint_Faxmodul.log"
+LOGDATEI="00_Logdatei_Faxmodul.log"	# entsteht in $WORD
 #
 ###############################################################################
 #
 # Windows Hostname (mit passender IP in die /etc/hosts eintragen!!)
 #
-WINPC="DV-DC-FXSRV"
+WINPC="Win7PC"
 #
 ###############################################################################
 #
 # Port des Rexservers am Windows PC (Firewall beachten!):
 #
-WINPORT="6666"
+WINPORT="6667"
 #
 ###############################################################################
 #
 # Pfad & Name des Scripts zum Faxversand auf dem Windows PC:
 #
-SENDCMD="C:\david\sendfax.vbs"
+SENDCMD="C:\david\sendfax.wsf"
 #
 ###############################################################################
 ###############################################################################
@@ -77,6 +86,19 @@ SENDCMD="C:\david\sendfax.vbs"
 
 
 
+# Weitere Definitionen zur spaeteren Verwendung:
+# Linux Pfade:
+FAXOUT="$WORD/$FAXDAT"
+LWORK="$FAXOUT/$WORK"
+LFAIL="$FAXOUT/$FAIL"
+LOG="$FAXOUT/$LOGDATEI"
+# Windows Pfade:
+WFAXOUT="$WINLW\\$FAXDAT"
+WWORK="$WINLW\\$FAXDAT\\$WORK"
+WFAIL="$WINLW\\$FAXDAT\\$FAIL"
+
+
+
 
 
 
@@ -89,6 +111,7 @@ function_ende ()
   test $(stat -c %s $LOG) -gt 10485760 && sed -i 1,$25000d $LOG
   #
   unix2dos $LOG >/dev/null 2>&1
+  [ -f "$LWORK/faxok" ] && rm -f $LWORK/faxok
   echo ""
 }
 
@@ -124,142 +147,117 @@ fi
 
 
 
+
 # Existieren die Faxausgangsordner?
 INFO=""
-if [ ! -e $FAXOUT/working ]; then
-	mkdir -m 775 -p $FAXOUT/working
+if [ ! -e $FAXOUT ]; then
+	mkdir -m 775 -p $FAXOUT
 	INFO="Dieser wurde automatisch angelegt."
 fi
-echo "Aktueller Arbeitsordner ist $FAXOUT/working. $INFO" | tee -a $LOG
+echo "       Das Faxmodul verwendet '$FAXOUT' als Arbeitsordner. $INFO"
 #
-if [ ! -e $FAXOUT/failed ]; then
-	mkdir -m 775 -p $FAXOUT/failed
+if [ ! -e $LWORK ]; then
+	mkdir -m 775 -p $LWORK
 	INFO="Dieser wurde automatisch angelegt."
 fi
-echo "Aktueller Ordner fuer verlorene Faxjobs ist $FAXOUT/failed. $INFO" | tee -a $LOG
+echo "       Verlaufsordner ist '$LWORK'. $INFO"
+#
+if [ ! -e $LFAIL ]; then
+	mkdir -m 775 -p $LFAIL
+	INFO="Dieser wurde automatisch angelegt."
+fi
+echo "       Verlorene Faxjobs liegen in '$LFAIL'. $INFO"
+
 
 
 
 
 # Und los...
-cd $FAXOUT
 #
 # Zu jedem PDF eine passende FNR Datei suchen:
-for ITEM in `find -maxdepth 1 -iname '*.pdf'`
+for ITEM in `find $FAXOUT -maxdepth 1 -iname '*.pdf'`
 do
         FAXFILE=$(basename $ITEM .pdf)
-        FNRFILE=$FAXFILE.fnr
+        FNRFILE="$FAXOUT/$FAXFILE.fnr"
+	echo "       In Bearbeitung: '$ITEM'." | tee -a $LOG
 	#
 	if [ -f $FNRFILE ]; then
-		# Ein gleichnamiges Dateipaar pdf & fnr gefunden:
-		###
-		### +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-		###
-		### Empfänger festlegen
-		###
-		#################################################################################
-		### Hinweis: Vorraussetzung hierfür ist die Dateinamenskonvention der 
-		###          OpenOffice Schnittstelle.
-		###          Dies muss ggf. auch für den Cups-Drucker beachtet werden
-		#################################################################################
-		FAXFILENF=`ls $FAXFILE.fnr | awk -F "_" '{print NF}'`
-		if [ "$FAXFILENF" == "6" ]; then
-			FAXEMPF=`ls $FAXFILE.fnr | awk -F "_" '{print $3"-"$4}'`
-		else
-			FAXEMPF=`ls $FAXFILE.fnr | awk -F "_" '{print $3}'`
-		fi
-		###
-		### Prüfen ob Empfänger "Leer" ist und auf "Unbekannt" setzen
-		###
-		if [ "$FAXEMPF" == "" ]; then
-			FAXEMPF="Unbekannt"
-		fi
-		echo "   --> Der Empfaenger ist: $FAXEMPF" | tee -a $LOG
-		###
-		### Betreff festlegen
-		###
-		FAXBETR=`ls $FAXFILE.fnr | awk -F "_" '{print $1"-"$2}'`
-		echo "   --> Der Betreff ist: $FAXBETR" | tee -a $LOG
-		###
-		### Es wird geprüft ob ein Dokument aus dem Pat-Ordner versendet werden soll
-		###
-		pdftotext $ITEM
-		TXTFILE=$FAXFILE.txt
-		SENDDOC=`cat $TXTFILE | grep '@@Send-DOC@@'`
-		if [ "$SENDDOC" == "@@Send-DOC@@" ]; then
-			DOCPATH=`cat $TXTFILE | grep '@@DOC-Path@@' | awk -F "@@" '{print $3}'`
-			DOCNAME=`cat $TXTFILE | grep '@@DOC-Name@@' | awk -F "@@" '{print $3}'`
-			#############################################################################
-			### ToDo Prüfen ob datei vorhanden ist, sonst Abbruch
-			#############################################################################
-			###
-			### Datei aus Pat-Ordner wird kopiert und umbenannt
-			###
-			cp -n $DOCPATH/"$DOCNAME" $FAXOUT/working
-			DOCNAME=`echo $DOCNAME | awk -F "/" '{print $NF}'`  ### entfernt ggf vorangestellte Verzeichnisse
-			mv $FAXOUT/working/"$DOCNAME" $FAXOUT/working/$FAXFILE.pdf  
-			rm -f $ITEM	$TXTFILE	### Übergabedatei wir aus $FAXOUT gelöscht
-			mv $FNRFILE $FAXOUT/working
-		else
-		###
-		### -----------------------------------------------------------------------------
-		###
-			mv $ITEM $FNRFILE $FAXOUT/working
-			rm -f $TXTFILE
-		fi
-		### Umwandlung nach TIFF:
-		###gs -q -sDEVICE=tiffgray -r240 -dBATCH -sPAPERSIZE=a4 -dPDFFitPage -dNOPAUSE 
-		gs -q -sDEVICE=tiffg4 -r600 -dBATCH -sPAPERSIZE=a4 -dPDFFitPage -dNOPAUSE \
-		-sOutputFile=working/$FAXFILE.tif working/$FAXFILE.pdf
-		#################################################################################
-		### Hinweis: Bei dem convert Befehl wird die erzeugte Datei zu groß
-		###          Mit dieser Größe kann Windows Fax dann nicht mehr umgehen
-		###          und macht daraus ein schwarzes Blatt (ca. halbe A4 Seite)
-		###
-		###          convert working/$FAXFILE.pdf working/$FAXFILE.tif
-		#################################################################################
+		# Ein gleichnamiges Dateipaar pdf & fnr wurde gefunden:
+                #################################################################
+                # Hier spaeter eine Function zur Analyse der Dateinameneinsetzen!
+		mv -f $ITEM $FNRFILE $LWORK/
+                #################################################################
 		#
-		FAXNR=`cat working/$FAXFILE.fnr`
-		echo "   --> Faxjob '$FAXFILE.tif' fuer Rufnummer '$FAXNR' wurde erstellt." | tee -a $LOG
-#-----------------------------------------
+		### Umwandlung nach TIFF:
+		gs -q -sDEVICE=tiffg4 -r600 -dBATCH -sPAPERSIZE=a4 -dPDFFitPage -dNOPAUSE \
+                      -sOutputFile=$LWORK/$FAXFILE.tif $LWORK/$FAXFILE.pdf >/dev/null 2>&1
+		#
+		# Fehler beim Konvertieren?
+		CHECK=`echo $?`
+		if [ -f "$LWORK/$FAXFILE.tif" -a "${CHECK}" = "0" ]; then
+			echo "       TIFF Konvertierung erfolgreich."
+		else
+			echo "   ### Fehler bei TIFF Konvertierung, Job wird verworfen." | tee -a $LOG
+			mv -f $LWORK/$FAXFILE.pdf $LFAIL
+			mv -f $LWORK/$FNRFILE $LFAIL/$FNRFILE.txt
+			continue			
+		fi
+		#
+		# FNR Datei korrekt?
+		if [ -f "$LWORK/$FAXFILE.fnr" ]; then
+			FAXNR=`cat $LWORK/$FAXFILE.fnr`
+			echo "       Faxjob '$FAXFILE.tif' fuer Rufnummer '$FAXNR' wurde erstellt." | tee -a $LOG
+		else
+			echo "   ### Keine Faxummer fuer $LWORK/$FAXFILE.tif gefunden, Job wird verworfen." | tee -a $LOG
+			mv -f $LWORK/$FAXFILE.tif $LFAIL
+			continue		
+		fi
+		#
 		# Ist der Rexserver am WinPC erreichbar?
 		REXOK=`netcat -v -w 1 $WINPC $WINPORT >/dev/null 2>&1; echo $?`
 		#
 		if [ "$REXOK" = "0" ]; then
 			# Job an das Windows Faxsystem uebergeben:
-			#echo "       Rexserver an $WINPC ist bereit." | tee -a $LOG
-			WINPATH=`echo $FAXOUT | awk -F "/" '{print $NF}'`     
-			#############################################################################
-			### ToDo "WINPATH" ggf an anderer stelle + Variable für LW-Buchstaben
-			#############################################################################
-			echo "DAVCMD start /min $SENDCMD W:\\$WINPATH\working\\$FAXFILE.tif $FAXNR $FAXBETR $FAXEMPF" | netcat $FAXSRV $WINPORT >/dev/null 
-			echo "Bitte warten..."
-			sleep 5
-			rm -f working/$FAXFILE.tif working/$FNRFILE working/$FAXFILE.pdf
-			#############################################################################
-			### ToDo Übermittlung durch eine Batch auf Windows-Seite ersetzen,
-			###      da der Rexserver wartet bis die Batch beendet ist und somit der 
-			###      sleep Befehl ausgelassen werden kann...
-			#############################################################################
-			echo "       Aktuellen Job an Faxserver uebergeben." | tee -a $LOG
+			[ -f "$LWORK/faxok" ] && rm -f $LWORK/faxok
+			#
+			echo "DAVCMD start /min $SENDCMD $WFAXOUT\\$FAXFILE.tif $FAXNR $FAXBETR $FAXEMPF && set/p=<nul>$WFAXOUT\\$WORK\\faxok" | netcat $FAXSRV $WINPORT >/dev/null
+			# Erfolgsauswertung der Rexserver Uebergabe:
+			if [ -f "$LWORK/faxok" ]; then
+				echo "   --> Faxjob wurde auf $WINPC an $SENDCMD uebergeben." | tee -a $LOG
+				##############################################################
+				# ACHTUNG: 
+				# Korrekte Uebergabe an den Rexserver bedeutet NICHT, dass
+				# die Bearbeitung dort geklappt hat!!
+				# 
+				# ToDo: Queue unter Linux erst leeren, wenn Bearbeitung auf
+				# dem Faxserver OK war (->Function)
+				rm -f $LWORK/$FAXFILE.tif $LWORK/$FAXFILE.fnr $LWORK/$FAXFILE.pdf
+				rm -f $LWORK/faxok
+				##############################################################
+			else
+				mv -f $LWORK/$FAXFILE.pdf $LFAIL >>$LOG 2>&1
+				mv -f $LWORK/$FAXFILE.fnr $LFAIL >>$LOG 2>&1
+				echo "   ### $SENDCMD hat einen Fehler ausgegeben, der Job wurde nach $LFAIL verschoben!" | tee -a $LOG
+			fi
 		else
 			# Job zurueck in die Warteschlange stellen:
-			mv -f working/$FNRFILE $FAXOUT
-			mv -f working/$FAXFILE.pdf $FAXOUT
-			rm -f working/$FAXFILE.tif
+			mv -f $LWORK/$FAXFILE.fnr $FAXOUT
+			mv -f $LWORK/$FAXFILE.pdf $FAXOUT
+			rm -f $LWORK/$FAXFILE.tif
 			echo "   ### Fehlerhafte Antwort des Rexservers an $WINPC erhalten, Versuch wird spaeter wiederholt." | tee -a $LOG
 		fi
-#-----------------------------------------
 	else
 		# keine FNR-Datei zum PDF gefunden (und nu?):
-		echo "   ### Keine Faxnummer fuer '$FAXFILE' gefunden." | tee -a $LOG
-		# cp -f $ITEM $FAXOUT/failed >>$LOG 2>&1 ####################### cp noch ersetzen durch mv
-		echo "       Das Dokument wurde in den Ordner $FAXOUT/failed verschoben." | tee -a $LOG
+		echo "   ### Keine Faxnummer fuer '$ITEM' gefunden." | tee -a $LOG
+		mv -f $ITEM $LFAIL >>$LOG 2>&1
+		echo "       Das Dokument wurde in den Ordner $LFAIL verschoben." | tee -a $LOG
 	fi
+#
 done
 
 
-
+echo "       Keine weiteren Jobs in $FAXOUT gefunden." | tee -a $LOG
+[ `find $LFAIL -type f  | wc -l` -gt "0" ] && echo "       !! Bitte '$LFAIL' pruefen !!" | tee -a $LOG
 
 function_ende
 exit 0
