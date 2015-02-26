@@ -52,7 +52,7 @@ LOGDATEI="00_Logdatei_Faxmodul.log"	# entsteht in $WORD
 #
 # Windows Hostname (mit passender IP in die /etc/hosts eintragen!!)
 #
-WINPC="DV-Faxserver"
+WINPC="Win7PC"
 #
 ###############################################################################
 #
@@ -64,7 +64,7 @@ WINPORT="6667"
 #
 # Pfad & Name des Scripts zum Faxversand auf dem Windows PC:
 #
-SENDCMD="C:\david\sendfax.wsf"
+SENDCMD="C:\\david\\sendfax.wsf"
 #
 ###############################################################################
 ###############################################################################
@@ -222,6 +222,7 @@ do
 			#
 			echo "DAVCMD start /min $SENDCMD /filename:$WWORK\\$FAXFILE.tif /faxnumber:$FAXNR /server:$WINPC && set/p=<nul>$WWORK\\faxok" | netcat $FAXSRV $WINPORT >/dev/null
 			# Erfolgsauswertung der Rexserver Uebergabe:
+			sleep 2
 			if [ -f "$LWORK/faxok" ]; then
 				echo "   --> Faxjob wurde auf $WINPC an $SENDCMD uebergeben." | tee -a $LOG
 				##############################################################
