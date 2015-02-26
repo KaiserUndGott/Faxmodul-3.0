@@ -52,7 +52,7 @@ LOGDATEI="00_Logdatei_Faxmodul.log"	# entsteht in $WORD
 #
 # Windows Hostname (mit passender IP in die /etc/hosts eintragen!!)
 #
-WINPC="Win7PC"
+WINPC="DV-Faxserver"
 #
 ###############################################################################
 #
@@ -220,7 +220,7 @@ do
 			# Job an das Windows Faxsystem uebergeben:
 			[ -f "$LWORK/faxok" ] && rm -f $LWORK/faxok
 			#
-			echo "DAVCMD start /min $SENDCMD $WFAXOUT\\$FAXFILE.tif $FAXNR $FAXBETR $FAXEMPF && set/p=<nul>$WFAXOUT\\$WORK\\faxok" | netcat $FAXSRV $WINPORT >/dev/null
+			echo "DAVCMD start /min $SENDCMD /filename:$WWORK\\$FAXFILE.tif /faxnumber:$FAXNR /server:$WINPC && set/p=<nul>$WWORK\\faxok" | netcat $FAXSRV $WINPORT >/dev/null
 			# Erfolgsauswertung der Rexserver Uebergabe:
 			if [ -f "$LWORK/faxok" ]; then
 				echo "   --> Faxjob wurde auf $WINPC an $SENDCMD uebergeben." | tee -a $LOG
@@ -231,8 +231,7 @@ do
 				# 
 				# ToDo: Queue unter Linux erst leeren, wenn Bearbeitung auf
 				# dem Faxserver OK war (->Function)
-				rm -f $LWORK/$FAXFILE.tif $LWORK/$FAXFILE.fnr $LWORK/$FAXFILE.pdf
-				rm -f $LWORK/faxok
+				rm -f $LWORK/*
 				##############################################################
 			else
 				mv -f $LWORK/$FAXFILE.pdf $LFAIL >>$LOG 2>&1
@@ -257,7 +256,7 @@ done
 
 
 echo "       Keine weiteren Jobs in $FAXOUT gefunden." | tee -a $LOG
-[ `find $LFAIL -type f  | wc -l` -gt "0" ] && echo "       !! Bitte '$LFAIL' pruefen !!" | tee -a $LOG
+[ `find $LFAIL -type f  | wc -l` -gt "0" ] && echo "     ! Bitte '$LFAIL' pruefen !" | tee -a $LOG
 
 function_ende
 exit 0
