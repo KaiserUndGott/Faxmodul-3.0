@@ -102,6 +102,42 @@ WFAIL="$WINLW\\$FAXDAT\\$FAIL"
 
 
 
+function_rexsend ()
+{
+  # Faxjob an den Windows Faxserver uebergeben:
+  echo "DAVCMD start /min $SENDCMD /filename:$WWORK\\$FAXFILE.tif /faxnumber:$FAXNR /server:$WINPC" | netcat $FAXSRV $WINPORT
+}
+
+
+
+
+
+function_rexcheck ()
+{
+  # Rueckgabewert des Rexservers auswerten:
+  echo "       Fehlerwert des REX-Servers: $ERROR"
+  #
+  case $ERROR in
+	0)	echo "   --> Faxjob wurde korrekt an $SENDCMD auf $WINPC uebergeben." | tee -a $LOG
+		REXFAIL=0
+		;;
+	1)	echo "   ### $SENDCMD auf $WINPC meldete Fehler 1. Rufen Sie die Polizei!" | tee -a $LOG
+		;;
+	2)	echo "   ### $SENDCMD auf $WINPC meldete Fehler 2. Legen Sie sich auf den Boden!" | tee -a $LOG
+		;;
+	3)	echo "   ### $SENDCMD auf $WINPC meldete Fehler 3. Beten Sie drei Rosenkränze!" | tee -a $LOG
+		;;
+	*)	echo "   ### $SENDCMD auf $WINPC meldete irgend einen Scheiss Fehler, weissjetztauchnich." | tee -a $LOG
+		;;
+  esac
+  #
+  rm -f $TEMP  
+}
+
+
+
+
+
 function_ende ()
 {
   JETZT=`date` && echo "Ende: $JETZT" | tee -a $LOG
@@ -121,6 +157,7 @@ function_ende ()
 # Trace anlegen und aktuellen Zeitpunkt eintragen:
 echo ""
 JETZT=`date` && echo "Speedpoint Faxmodul gestartet: $JETZT" | tee -a $LOG
+
 
 
 
@@ -172,8 +209,41 @@ echo "       Verlorene Faxjobs liegen in '$LFAIL'. $INFO"
 
 
 
-# Und los...
+# Ist der Rexserver am WinPC erreichbar?
+nc -w1 $WINPC $WINPORT
+REXOK=$(echo $?)
 #
+if [ "${REXOK}" = "0" ]; then
+	echo "       Verbindungstest zum Rexserver auf $WINPC erfolgreich." | tee -a $LOG
+else
+	echo "   ### ABBRUCH: Fehlerhafte Antwort des Rexservers an $WINPC erhalten (Code $REXOK)." | tee -a $LOG
+	exit 1
+fi
+
+
+
+
+
+# Und los...
+
+
+
+
+
+
+# $PATH ggf. anpassen, damit die Errorcode Auswertung des Rexserver Befehls klappt:
+if [ `echo $PATH | awk -F ':' '{print $1}'` = "/home/david/bin" ]; then
+	echo "       Umgebungsvariablen sind okay."
+else
+	PATH="/home/david/bin:$PATH"
+	export PATH
+	echo "       /home/david/bin wurde zu \$PATH hinzugefuegt."
+fi
+
+
+
+
+
 # Zu jedem PDF eine passende FNR Datei suchen:
 for ITEM in `find $FAXOUT -maxdepth 1 -iname '*.pdf'`
 do
@@ -196,6 +266,7 @@ do
 		CHECK=`echo $?`
 		if [ -f "$LWORK/$FAXFILE.tif" -a "${CHECK}" = "0" ]; then
 			echo "       TIFF Konvertierung erfolgreich."
+			rm -f $LWORK/$FAXFILE.pdf
 		else
 			echo "   ### Fehler bei TIFF Konvertierung, Job wird verworfen." | tee -a $LOG
 			mv -f $LWORK/$FAXFILE.pdf $LFAIL
@@ -213,38 +284,23 @@ do
 			continue		
 		fi
 		#
-		# Ist der Rexserver am WinPC erreichbar?
-		REXOK=`netcat -v -w 1 $WINPC $WINPORT >/dev/null 2>&1; echo $?`
+
+		TEMP=$(mktemp /tmp/rexwert.XXXXXXXXXX) 
+		function_rexsend | tee >$TEMP
+# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+		ERROR=$(cat $TEMP)	# Fuer scharfen Betrieb hier einkommentieren ::::::::::::::::::::::::::::::::::::
+#		ERROR=3 		# Zum Testen der Rexserver Fehlerwerte, sonst loeschen ::::::::::::::::::::::::::
+# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+		sleep 2
 		#
-		if [ "$REXOK" = "0" ]; then
-			# Job an das Windows Faxsystem uebergeben:
-			[ -f "$LWORK/faxok" ] && rm -f $LWORK/faxok
-			#
-			echo "DAVCMD start /min $SENDCMD /filename:$WWORK\\$FAXFILE.tif /faxnumber:$FAXNR /server:$WINPC && set/p=<nul>$WWORK\\faxok" | netcat $FAXSRV $WINPORT >/dev/null
-			# Erfolgsauswertung der Rexserver Uebergabe:
-			sleep 2
-			if [ -f "$LWORK/faxok" ]; then
-				echo "   --> Faxjob wurde auf $WINPC an $SENDCMD uebergeben." | tee -a $LOG
-				##############################################################
-				# ACHTUNG: 
-				# Korrekte Uebergabe an den Rexserver bedeutet NICHT, dass
-				# die Bearbeitung dort geklappt hat!!
-				# 
-				# ToDo: Queue unter Linux erst leeren, wenn Bearbeitung auf
-				# dem Faxserver OK war (->Function)
-				rm -f $LWORK/*
-				##############################################################
-			else
-				mv -f $LWORK/$FAXFILE.pdf $LFAIL >>$LOG 2>&1
-				mv -f $LWORK/$FAXFILE.fnr $LFAIL >>$LOG 2>&1
-				echo "   ### $SENDCMD hat einen Fehler ausgegeben, der Job wurde nach $LFAIL verschoben!" | tee -a $LOG
-			fi
+		REXFAIL=1
+		function_rexcheck
+		#
+		if [ ${REXFAIL} = "0" ]; then
+			rm -f $LWORK/*
 		else
-			# Job zurueck in die Warteschlange stellen:
-			mv -f $LWORK/$FAXFILE.fnr $FAXOUT
-			mv -f $LWORK/$FAXFILE.pdf $FAXOUT
-			rm -f $LWORK/$FAXFILE.tif
-			echo "   ### Fehlerhafte Antwort des Rexservers an $WINPC erhalten, Versuch wird spaeter wiederholt." | tee -a $LOG
+			mv -f $LWORK/$FAXFILE.* $LFAIL
+			echo "   ### Faxjob wurde nach $LFAIL verschoben."
 		fi
 	else
 		# keine FNR-Datei zum PDF gefunden (und nu?):
@@ -256,10 +312,19 @@ do
 done
 
 
+
+
 echo "       Keine weiteren Jobs in $FAXOUT gefunden." | tee -a $LOG
-[ `find $LFAIL -type f  | wc -l` -gt "0" ] && echo "     ! Bitte '$LFAIL' pruefen !" | tee -a $LOG
+[ `find $LFAIL -type f  | wc -l` -gt "0" ] && echo "   !!! Bitte '$LFAIL' pruefen !!!" | tee -a $LOG
+
+
 
 function_ende
+#########################################################################################################################
+# FBW: kopiert zu Testzwecken immer wieder Jobs in die Queue:
+cp -rvpf /home/david/Desktop/faxablage/* /home/david/trpword/faxablage/
+echo ""
+#########################################################################################################################
 exit 0
 
 
