@@ -12,9 +12,10 @@
 #
 # Bitte zur regelmaessigen Ausführung in die crontab eintragen!
 #
-# Script erfordert sendfax.wsf aufseiten des Windows PCs, siehe ganz unten.
+# Dieses Script uebergibt ein TIFF Dokument sowie sieben Parameter an einen
+# Windows Faxserver. FritzFax oder Windows Fax koennen angesteuert werden.
 #
-# Speedpoint (FW) /HBU (TL), Stand: Februar 2015
+# Speedpoint (FW) /HBU (TL), Stand: März 2015
 #
 ###############################################################################
 
@@ -94,9 +95,49 @@ LFAIL="$FAXOUT/$FAIL"
 LOG="$FAXOUT/$LOGDATEI"
 # Windows Pfade:
 WFAXOUT="$WINLW\\$FAXDAT"
-WWORK="$WINLW\\$FAXDAT\\$WORK"
+WWORK="$WINLW\\$FAXDAT\\$WORK"						###### Parameter 4 fuer Windows
 WFAIL="$WINLW\\$FAXDAT\\$FAIL"
 
+
+
+
+
+
+function_datname ()
+{
+  FXTEMP=$(mktemp /tmp/faxfelder.XXXXXXXXXX)
+  #
+  # Dateinamen in Bestandteile zerlegen (gem. DV-OO-Schema max. 6 Anteile):
+  for I in {1..6}; do
+	echo $FAXFILE | awk -F "_" '{print $'$I'}' >>$FXTEMP
+  done
+  #
+  # Auswertung der Felder:
+  # Parameter 1 fuer Windows (=Faxnr.) siehe weiter unten
+  DATNAM="Unbekannt"							###### Parameter 2 fuer Windows
+  PATNUM=`sed -n '2 p' $FXTEMP`						###### Parameter 3 fuer Windows
+  TYP=`sed -n '1 p' $FXTEMP`
+  #
+  if [ "$TYP" = "patientbrief" ]; then
+	DATNAM="Arztbrief"
+	# Empfaenger ermitteln und ersten Buchstaben gross schreiben:
+	EMPF=$(sed -n '3 p' $FXTEMP | sed -r 's/(\<[a-zA-Z])/\U\1/g') 	###### Parameter 6, nur fuer Windows
+	ARZT=`sed -n '6 p' $FXTEMP`
+	[  "$ARZT" = "" ] || ARZT=$(sed -n '4 p' $FXTEMP)		###### Parameter 7, nur fuer Windows
+  fi
+  #
+  #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  echo "	+ Faxnummer:  $FAXNR"               | tee -a $LOG
+  echo "	+ Dateiname:  $DATNAM"              | tee -a $LOG
+  echo "	+ Pat.nummer: $PATNUM"              | tee -a $LOG
+  echo "	+ Win Pfad:   $WWORK\\$FAXFILE.tif" | tee -a $LOG
+  echo "	+ Dummy:      $DUMMY"               | tee -a $LOG
+  echo "	+ Empfaenger: $EMPF"                | tee -a $LOG
+  echo "	+ Arzt:       $ARZT"                | tee -a $LOG
+  #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  #
+  rm -f $FXTEMP
+}
 
 
 
@@ -106,6 +147,9 @@ function_rexsend ()
 {
   # Faxjob an den Windows Faxserver uebergeben:
   echo "DAVCMD start /min $SENDCMD /filename:$WWORK\\$FAXFILE.tif /faxnumber:$FAXNR /server:$WINPC" | netcat $FAXSRV $WINPORT
+  #
+  # Neue Parameter Reihenfolge:
+  # echo "DAVCMD start /min $SENDCMD $FAXNR $DATNAM $PATNUM$ WWORK\\$FAXFILE.tif $DUMMY $EMPF " | netcat $FAXSRV $WINPORT
 }
 
 
@@ -253,12 +297,10 @@ do
 	#
 	if [ -f $FNRFILE ]; then
 		# Ein gleichnamiges Dateipaar pdf & fnr wurde gefunden:
-                #################################################################
-                # Hier spaeter eine Function zur Analyse der Dateinameneinsetzen!
+		function_datname
 		mv -f $ITEM $FNRFILE $LWORK/
-                #################################################################
 		#
-		### Umwandlung nach TIFF:
+		# Umwandlung nach TIFF:
 		gs -q -sDEVICE=tiffg4 -r600 -dBATCH -sPAPERSIZE=a4 -dPDFFitPage -dNOPAUSE \
                       -sOutputFile=$LWORK/$FAXFILE.tif $LWORK/$FAXFILE.pdf >/dev/null 2>&1
 		#
@@ -276,7 +318,7 @@ do
 		#
 		# FNR Datei korrekt?
 		if [ -f "$LWORK/$FAXFILE.fnr" ]; then
-			FAXNR=`cat $LWORK/$FAXFILE.fnr`
+			FAXNR=`cat $LWORK/$FAXFILE.fnr`				######## Parameter 1 fuer Windows
 			echo "       Faxjob '$FAXFILE.tif' fuer Rufnummer '$FAXNR' wurde erstellt." | tee -a $LOG
 		else
 			echo "   ### Keine Faxummer fuer $LWORK/$FAXFILE.tif gefunden, Job wird verworfen." | tee -a $LOG
@@ -284,13 +326,9 @@ do
 			continue		
 		fi
 		#
-
 		TEMP=$(mktemp /tmp/rexwert.XXXXXXXXXX) 
 		function_rexsend | tee >$TEMP
-# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-		ERROR=$(cat $TEMP)	# Fuer scharfen Betrieb hier einkommentieren ::::::::::::::::::::::::::::::::::::
-#		ERROR=3 		# Zum Testen der Rexserver Fehlerwerte, sonst loeschen ::::::::::::::::::::::::::
-# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+		ERROR=$(cat $TEMP)
 		sleep 2
 		#
 		REXFAIL=1
@@ -323,8 +361,8 @@ function_ende
 #########################################################################################################################
 # FBW: kopiert zu Testzwecken immer wieder Jobs in die Queue:
 cp -rvpf /home/david/Desktop/faxablage/* /home/david/trpword/faxablage/
-echo ""
 #########################################################################################################################
+echo ""
 exit 0
 
 
