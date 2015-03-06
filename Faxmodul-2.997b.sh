@@ -95,7 +95,7 @@ LFAIL="$FAXOUT/$FAIL"
 LOG="$FAXOUT/$LOGDATEI"
 # Windows Pfade:
 WFAXOUT="$WINLW\\$FAXDAT"
-WWORK="$WINLW\\$FAXDAT\\$WORK"						###### Parameter 4 fuer Windows
+WWORK="$WINLW\\$FAXDAT\\$WORK"
 WFAIL="$WINLW\\$FAXDAT\\$FAIL"
 
 
@@ -105,38 +105,32 @@ WFAIL="$WINLW\\$FAXDAT\\$FAIL"
 
 function_datname ()
 {
-  FXTEMP=$(mktemp /tmp/faxfelder.XXXXXXXXXX)
-  #
-  # Dateinamen in Bestandteile zerlegen (gem. DV-OO-Schema max. 6 Anteile):
-  for I in {1..6}; do
-	echo $FAXFILE | awk -F "_" '{print $'$I'}' >>$FXTEMP
-  done
-  #
-  # Auswertung der Felder:
-  # Parameter 1 fuer Windows (=Faxnr.) siehe weiter unten
-  DATNAM="Unbekannt"							###### Parameter 2 fuer Windows
-  PATNUM=`sed -n '2 p' $FXTEMP`						###### Parameter 3 fuer Windows
-  TYP=`sed -n '1 p' $FXTEMP`
+  VAR=$(echo $FAXFILE | awk -F"_" '{print ($1,$2,$3,$4,$5,$6)}')
+  set -- $VAR
+  PATNUM=$(echo $2)
+  TYP=$(echo $1)
   #
   if [ "$TYP" = "patientbrief" ]; then
 	DATNAM="Arztbrief"
-	# Empfaenger ermitteln und ersten Buchstaben gross schreiben:
-	EMPF=$(sed -n '3 p' $FXTEMP | sed -r 's/(\<[a-zA-Z])/\U\1/g') 	###### Parameter 6, nur fuer Windows
-	ARZT=`sed -n '6 p' $FXTEMP`
-	[  "$ARZT" = "" ] || ARZT=$(sed -n '4 p' $FXTEMP)		###### Parameter 7, nur fuer Windows
+	# Ersten Buchstaben des Empfaengers gross schreiben:
+	EMPF=$(echo $3 | sed -r 's/(\<[a-zA-Z])/\U\1/g')
+	ARZT=$(echo $6)
+	[  "$ARZT" = "" ] || ARZT=$(echo $4)
+  else
+	DATNAM="Dokument"
   fi
   #
-  #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-  echo "	+ Faxnummer:  $FAXNR"               | tee -a $LOG
-  echo "	+ Dateiname:  $DATNAM"              | tee -a $LOG
-  echo "	+ Pat.nummer: $PATNUM"              | tee -a $LOG
-  echo "	+ Win Pfad:   $WWORK\\$FAXFILE.tif" | tee -a $LOG
-  echo "	+ Dummy:      $DUMMY"               | tee -a $LOG
-  echo "	+ Empfaenger: $EMPF"                | tee -a $LOG
-  echo "	+ Arzt:       $ARZT"                | tee -a $LOG
-  #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
   #
-  rm -f $FXTEMP
+  # Die Faxnummer ist Parameter 1 fuer Windows, wird jedoch nicht in dieser function ermittelt.
+  #
+  echo "	+ Dateiname:  $DATNAM"              | tee -a $LOG	### Parameter 2 fuer Windows
+  echo "	+ Pat.nummer: $PATNUM"              | tee -a $LOG	### Parameter 3 fuer Windows
+  echo "	+ Win Pfad:   $WWORK\\$FAXFILE.tif" | tee -a $LOG	### Parameter 4 fuer Windows
+  echo "	+ Dummy:      $DUMMY"               | tee -a $LOG	### leerer Dummy, nur fuer FriFa
+  echo "	+ Empfaenger: $EMPF"                | tee -a $LOG	### Parameter 6, nur fuer Windows Fax
+  echo "	+ Arzt:       $ARZT"                | tee -a $LOG	### Parameter 7, nur fuer Windows Fax
+  #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 }
 
 
@@ -318,7 +312,7 @@ do
 		#
 		# FNR Datei korrekt?
 		if [ -f "$LWORK/$FAXFILE.fnr" ]; then
-			FAXNR=`cat $LWORK/$FAXFILE.fnr`				######## Parameter 1 fuer Windows
+			FAXNR=`cat $LWORK/$FAXFILE.fnr`			### Parameter 1 fuer Windows
 			echo "       Faxjob '$FAXFILE.tif' fuer Rufnummer '$FAXNR' wurde erstellt." | tee -a $LOG
 		else
 			echo "   ### Keine Faxummer fuer $LWORK/$FAXFILE.tif gefunden, Job wird verworfen." | tee -a $LOG
